@@ -98,3 +98,16 @@ serves a project site from `/<repo>/`, where absolute asset URLs would 404.
 There is no backend. Decoding, conversion and encoding all happen on your device via Canvas
 and WebCodecs. No image is ever transmitted, and the app makes no network requests after the
 initial page load.
+
+## License
+
+[GNU General Public License v3.0](LICENSE).
+
+You are free to use, study, modify and redistribute this software. GPL-3.0 is a *copyleft*
+licence: if you **distribute** a modified version, you must release it under GPL-3.0 too and
+make the source available. Note that merely hosting a modified version on a website is not
+distribution under GPL-3.0, so it does not trigger that obligation — AGPL-3.0 is the variant
+that closes that gap. See the [full text](LICENSE) for the exact terms.
+
+Artwork you create with ASCII Forge is yours. The licence covers this software, not its
+output.
