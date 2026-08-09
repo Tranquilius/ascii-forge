@@ -38,11 +38,11 @@ function App() {
         </div>
 
         <aside className="flex w-full flex-col rounded-lg border border-[var(--panel-border)] bg-[var(--panel)] lg:w-80 lg:shrink-0">
+          <BackgroundPanel />
           <RampPanel />
           <SamplingPanel />
           <TonePanel />
           <MixPanel />
-          <BackgroundPanel />
           <ExportPanel />
         </aside>
       </main>

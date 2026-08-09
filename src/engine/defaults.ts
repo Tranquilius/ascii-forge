@@ -37,11 +37,15 @@ export const DEFAULT_PARAMS: AsciiParams = {
   contrast: 22,
   gamma: 1.0,
 
-  mixMode: 'mono',
+  // 'original' keeps each cell's true source colour — the result you'd expect from
+  // "convert this image". Mono and Multi are deliberate stylizations, so they are opt-in.
+  mixMode: 'original',
   monoColor: '#e5e5e5',
 
-  bgMode: 'transparent',
-  bgColor: '#0f1115',
+  bgMode: 'solid',
+  bgColor: '#000000',
+  // Fixed. The blend-mode control was removed from the UI; the renderers still honour this
+  // field, so leaving it at 'normal' keeps compositing predictable everywhere.
   blendMode: 'normal',
 
   exportScale: 1,

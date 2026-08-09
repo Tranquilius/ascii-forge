@@ -53,7 +53,7 @@ export function RampPanel() {
   }
 
   return (
-    <Panel title="Character ramp">
+    <Panel title="Glyphs">
       <SegmentedControl value={ramp} options={RAMP_OPTIONS} onChange={selectPreset} />
 
       {ramp === 'language' && (

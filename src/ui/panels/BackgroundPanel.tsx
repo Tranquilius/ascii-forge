@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store';
-import type { BackgroundMode, BlendMode } from '@/engine/types';
+import type { BackgroundMode } from '@/engine/types';
 import { Panel } from '@/ui/Panel';
 import { SegmentedControl } from '@/ui/controls/SegmentedControl';
 import { ColorField } from '@/ui/controls/ColorField';
@@ -11,26 +11,15 @@ const REMOVAL_MODE_OPTIONS = [
   { value: 'all', label: 'All matching', title: 'Every cell matching the key colour, anywhere' },
 ];
 
+// Solid first, and the default: an opaque backdrop is what most output is wanted on, and it
+// makes the glyphs legible immediately instead of over a checkerboard.
 const BG_MODE_OPTIONS: { value: BackgroundMode; label: string }[] = [
-  { value: 'transparent', label: 'Transparent' },
   { value: 'solid', label: 'Solid' },
-];
-
-const BLEND_MODE_OPTIONS: { value: BlendMode; label: string }[] = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'multiply', label: 'Multiply' },
-  { value: 'screen', label: 'Screen' },
-  { value: 'overlay', label: 'Overlay' },
-  { value: 'darken', label: 'Darken' },
-  { value: 'lighten', label: 'Lighten' },
-  { value: 'color-dodge', label: 'Color Dodge' },
-  { value: 'color-burn', label: 'Color Burn' },
-  { value: 'soft-light', label: 'Soft Light' },
-  { value: 'hard-light', label: 'Hard Light' },
+  { value: 'transparent', label: 'Transparent' },
 ];
 
 export function BackgroundPanel() {
-  const { bgMode, bgColor, blendMode, bgRemove, bgKeyColor, bgTolerance, bgContiguous, bgFeather } =
+  const { bgMode, bgColor, bgRemove, bgKeyColor, bgTolerance, bgContiguous, bgFeather } =
     useAppStore((s) => s.params);
   const setParam = useAppStore((s) => s.setParam);
   const setParams = useAppStore((s) => s.setParams);
@@ -38,7 +27,7 @@ export function BackgroundPanel() {
   const setPickingKeyColor = useAppStore((s) => s.setPickingKeyColor);
 
   return (
-    <Panel title="Background">
+    <Panel title="Canvas">
       <div className="flex flex-col gap-2 rounded-md border border-[var(--panel-border)] p-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-[var(--text)]">Remove background</span>
@@ -117,12 +106,6 @@ export function BackgroundPanel() {
         value={bgColor}
         disabled={bgMode !== 'solid'}
         onChange={(v) => setParam('bgColor', v)}
-      />
-      <SegmentedControl
-        label="Blend mode"
-        value={blendMode}
-        options={BLEND_MODE_OPTIONS}
-        onChange={(v) => setParam('blendMode', v)}
       />
     </Panel>
   );

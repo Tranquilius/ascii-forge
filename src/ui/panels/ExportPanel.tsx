@@ -123,7 +123,7 @@ export function ExportPanel() {
   }
 
   return (
-    <Panel title="Export">
+    <Panel title="Output">
       <SegmentedControl
         label="Scale"
         value={String(exportScale)}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampCrop, isValidCrop, resolveCrop } from './crop';
+import { clampCrop, composeCrop, FULL_CROP, isValidCrop, resolveCrop } from './crop';
 import { computeRows } from './sample';
 
 const FULL = { x: 0, y: 0, w: 1, h: 1 };
@@ -118,5 +118,70 @@ describe('crop feeds the aspect calculation', () => {
   it('the uncropped widescreen source is wider than it is tall', () => {
     const rows = computeRows(200, 1920, 1080, CELL_ASPECT, 1);
     expect(rows).toBe(56);
+  });
+});
+
+describe('composeCrop', () => {
+  // A selection drawn on a cropped view is normalised against that view, not the original
+  // image. Without composing, cropping twice jumps to the wrong region.
+  it('passes a child through when the parent is the whole image', () => {
+    const child = { x: 0.2, y: 0.3, w: 0.4, h: 0.5 };
+    expect(composeCrop(null, child)).toEqual(child);
+    expect(composeCrop(FULL_CROP, child)).toEqual(child);
+  });
+
+  it('rescales a child into the parent window', () => {
+    // Parent is the right half; selecting the left half of that view is the middle quarter.
+    const out = composeCrop({ x: 0.5, y: 0, w: 0.5, h: 1 }, { x: 0, y: 0, w: 0.5, h: 1 });
+    expect(out).toEqual({ x: 0.5, y: 0, w: 0.25, h: 1 });
+  });
+
+  it('offsets by the parent origin', () => {
+    const out = composeCrop({ x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
+    expect(out.x).toBeCloseTo(0.5, 10);
+    expect(out.y).toBeCloseTo(0.5, 10);
+    expect(out.w).toBeCloseTo(0.25, 10);
+    expect(out.h).toBeCloseTo(0.25, 10);
+  });
+
+  it('a full-frame child selects the whole parent unchanged', () => {
+    const parent = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+    const out = composeCrop(parent, FULL_CROP);
+    expect(out.x).toBeCloseTo(parent.x, 10);
+    expect(out.y).toBeCloseTo(parent.y, 10);
+    expect(out.w).toBeCloseTo(parent.w, 10);
+    expect(out.h).toBeCloseTo(parent.h, 10);
+  });
+
+  it('never escapes the parent window', () => {
+    const parent = { x: 0.3, y: 0.3, w: 0.4, h: 0.4 };
+    for (const child of [
+      { x: 0, y: 0, w: 1, h: 1 },
+      { x: 0.9, y: 0.9, w: 0.1, h: 0.1 },
+      { x: 0.4, y: 0.1, w: 0.5, h: 0.8 },
+    ]) {
+      const out = composeCrop(parent, child);
+      expect(out.x).toBeGreaterThanOrEqual(parent.x - 1e-9);
+      expect(out.y).toBeGreaterThanOrEqual(parent.y - 1e-9);
+      expect(out.x + out.w).toBeLessThanOrEqual(parent.x + parent.w + 1e-9);
+      expect(out.y + out.h).toBeLessThanOrEqual(parent.y + parent.h + 1e-9);
+    }
+  });
+
+  it('composes repeatedly, each step shrinking into the last', () => {
+    // Three successive half-crops of the top-left corner land on one eighth.
+    const half = { x: 0, y: 0, w: 0.5, h: 0.5 };
+    let acc = composeCrop(null, half);
+    acc = composeCrop(acc, half);
+    acc = composeCrop(acc, half);
+    expect(acc.w).toBeCloseTo(0.125, 10);
+    expect(acc.h).toBeCloseTo(0.125, 10);
+  });
+
+  it('resolves against real pixels the way nesting implies', () => {
+    // Right half of a 800x600 image, then the bottom half of that view.
+    const first = composeCrop(null, { x: 0.5, y: 0, w: 0.5, h: 1 });
+    const second = composeCrop(first, { x: 0, y: 0.5, w: 1, h: 0.5 });
+    expect(resolveCrop(second, 800, 600)).toEqual({ sx: 400, sy: 300, sw: 400, sh: 300 });
   });
 });

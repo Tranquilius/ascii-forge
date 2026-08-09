@@ -85,3 +85,24 @@ export function resolveCrop(
 
 /** The full-frame crop, useful as an overlay's starting rectangle. */
 export const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 };
+
+/**
+ * Map a selection drawn on an already-cropped view back into source coordinates.
+ *
+ * Once a crop is applied the preview shows only that region, so a new selection drawn over
+ * it is normalised against the *region*, not the original image. Storing those coordinates
+ * directly would reinterpret them against the full source and jump somewhere else entirely.
+ * Composing rescales the child into the parent's window.
+ *
+ * `parent` of null means the view is the whole image, where the child already is in source
+ * coordinates and passes through unchanged.
+ */
+export function composeCrop(parent: CropRect | null | undefined, child: CropRect): CropRect {
+  if (!isValidCrop(parent)) return child;
+  return {
+    x: parent.x + child.x * parent.w,
+    y: parent.y + child.y * parent.h,
+    w: child.w * parent.w,
+    h: child.h * parent.h,
+  };
+}

@@ -57,12 +57,10 @@ const HANDLE_POS: Record<string, { left: string; top: string }> = {
 };
 
 export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }: CropOverlayProps) {
-  const crop = useAppStore((s) => s.params.crop);
   const cols = useAppStore((s) => s.params.cols);
   const heightScale = useAppStore((s) => s.params.heightScale);
-  const setParam = useAppStore((s) => s.setParam);
+  const commitCrop = useAppStore((s) => s.commitCrop);
   const setCropping = useAppStore((s) => s.setCropping);
-  const clearCrop = useAppStore((s) => s.clearCrop);
 
   const [draft, setDraft] = useState<CropRect | null>(null);
   const [aspect, setAspect] = useState<AspectPresetId>('free');
@@ -83,7 +81,10 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
     setDraft(rect);
   }, []);
 
-  const active = draft ?? crop;
+  // Only the draft. The canvas already shows the active view, so a selection is always
+  // drawn fresh against it — falling back to params.crop would paint the parent rectangle
+  // on top of its own contents.
+  const active = draft;
 
   /**
    * The canvas's displayed box. Read from getBoundingClientRect rather than canvas.width:
@@ -117,13 +118,13 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
     };
   }, [measure, canvasRef]);
 
-  const commit = useCallback(
-    (rect: CropRect | null) => {
-      setParam('crop', rect);
-      updateDraft(null);
-    },
-    [setParam, updateDraft],
-  );
+  /** Apply the selection: opens it as a new view and closes this overlay. */
+  const apply = useCallback(() => {
+    const rect = draftRef.current;
+    if (!rect || !isUsableRect(rect)) return;
+    commitCrop(rect);
+    updateDraft(null);
+  }, [commitCrop, updateDraft]);
 
   // Pointer move/up live on the window so a drag that leaves the canvas still tracks — the
   // common case when selecting all the way to an edge.
@@ -159,11 +160,11 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
       const drag = dragRef.current;
       dragRef.current = null;
       if (!drag) return;
+      // Releasing the pointer only finishes the gesture — the selection stays editable
+      // until Apply. Committing here created the new tab mid-drag and left this overlay
+      // stranded on top of it.
       const current = draftRef.current;
-      // A click with no meaningful drag clears rather than applying a sliver.
-      if (current && isUsableRect(current)) setParam('crop', current);
-      else if (drag.kind === 'new') setParam('crop', null);
-      updateDraft(null);
+      if (!current || !isUsableRect(current)) updateDraft(null);
     };
 
     window.addEventListener('pointermove', onMove);
@@ -183,12 +184,12 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
         updateDraft(null);
         setCropping(false);
       } else if (e.key === 'Enter') {
-        setCropping(false);
+        apply();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setCropping, updateDraft]);
+  }, [setCropping, updateDraft, apply]);
 
   function beginNew(e: React.PointerEvent) {
     const b = measure();
@@ -217,7 +218,9 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
     setAspect(id);
     const preset = ASPECT_PRESETS.find((p) => p.id === id);
     if (preset?.ratio && active) {
-      commit(applyAspect(active, preset.ratio, sourceWidth, sourceHeight));
+      // Reshape the pending selection only — the ratio buttons are part of composing the
+      // crop, not a way to apply it.
+      updateDraft(applyAspect(active, preset.ratio, sourceWidth, sourceHeight));
     }
   }
 
@@ -308,22 +311,27 @@ export function CropOverlay({ canvasRef, sourceWidth, sourceHeight, cellAspect }
         ))}
         <span className="mx-1 h-4 w-px bg-[var(--panel-border)]" />
         <span className="font-mono text-xs text-[var(--text-dim)]">
-          {cropPx} · {grid.cols}×{grid.rows} cells
+          {active ? `${cropPx} · ${grid.cols}×${grid.rows} cells` : 'Drag to select a region'}
         </span>
         <span className="mx-1 h-4 w-px bg-[var(--panel-border)]" />
         <button
           type="button"
-          onClick={() => clearCrop()}
+          onClick={() => {
+            updateDraft(null);
+            setCropping(false);
+          }}
           className="rounded-md border border-[var(--panel-border)] px-2 py-1 text-xs text-[var(--text)] hover:border-[var(--accent)]"
         >
-          Clear
+          Cancel
         </button>
         <button
           type="button"
-          onClick={() => setCropping(false)}
-          className="rounded-md border border-[var(--accent)] bg-[var(--accent-dim)] px-2 py-1 text-xs text-[var(--text)]"
+          onClick={apply}
+          disabled={!active || !isUsableRect(active)}
+          title="Open this region as a new view"
+          className="rounded-md border border-[var(--accent)] bg-[var(--accent-dim)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Done
+          Apply
         </button>
       </div>
     </div>

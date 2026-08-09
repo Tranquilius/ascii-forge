@@ -3,6 +3,21 @@
 Turn images, GIFs and video into ASCII art — then animate it. Everything runs in your
 browser: no account, no upload, no server. Your images never leave your machine.
 
+## Credits
+
+This started as an attempt to rebuild [asciinator.app](https://asciinator.app/), which is
+where the whole idea came from. Its control set and layout are what the first version of
+this project was modelled on, and the reference output from it is what the sampling and tone
+maths were tuned against.
+
+**Asciinator is the better tool.** It is more polished and more considered than this is, and
+if you just want good ASCII art you should use it. This exists because I wanted to build my
+own and take it somewhere else — the animation styles, the language ramps, the crop tabs and
+the background matting are features I wanted rather than gaps in the original.
+
+No code was copied. The engine here was written from scratch, and the name, logo and styling
+are its own.
+
 ## Features
 
 **Conversion**
@@ -10,10 +25,11 @@ browser: no account, no upload, no server. Your images never leave your machine.
 - Seven glyph ramps: Standard, Blocks, Detailed, Detailed+, Minimal, Custom, and Languages
 - **Detailed+** is measured empirically — every printable glyph the render font can actually
   draw is rasterised, sorted by real ink coverage, and deduplicated into ~237 tonal steps
-- **Languages** restricts the ramp to a single script (Japanese, Korean, Chinese, Greek,
-  Cyrillic, Hebrew, Braille, Runic, Latin), with the cell grid resized to match full-width
-  glyphs so CJK output stays aligned
-- Live controls for width, character size, tone, density bias, colour mix and blending
+- **Languages** restricts the ramp to a single script — Latin, Greek, Cyrillic, Devanagari,
+  Bengali, Tamil, Thai, Georgian, Armenian, Ethiopic, Cherokee, Japanese, Korean, Chinese,
+  Braille or Runic. Combining marks are rejected by Unicode category, and the cell grid is
+  measured from the ramp in use so full-width CJK stays aligned
+- Live controls for width, character size, tone, density bias and colour mix
 
 **Framing**
 - **Crop** — select a region; the preview and every export use only that area. The crop is

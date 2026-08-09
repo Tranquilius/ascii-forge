@@ -7,7 +7,7 @@ export function SamplingPanel() {
   const setParam = useAppStore((s) => s.setParam);
 
   return (
-    <Panel title="Sampling">
+    <Panel title="Resolution">
       <Slider label="Width" value={cols} min={20} max={400} step={1} onChange={(v) => setParam('cols', v)} />
       <Slider
         label="Height scale"
