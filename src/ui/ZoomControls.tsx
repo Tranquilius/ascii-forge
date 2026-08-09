@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store';
 import { MAX_ZOOM, MIN_ZOOM } from '@/ui/zoom';
+import { isValidCrop } from '@/engine/crop';
 
 interface ZoomControlsProps {
   /** The zoom actually applied — resolved fit zoom, or the manual value. */
@@ -23,6 +24,11 @@ export function ZoomControls({ effectiveZoom }: ZoomControlsProps) {
   const zoomBy = useAppStore((s) => s.zoomBy);
   const zoomToFit = useAppStore((s) => s.zoomToFit);
   const zoomToActual = useAppStore((s) => s.zoomToActual);
+  const cropping = useAppStore((s) => s.cropping);
+  const toggleCropping = useAppStore((s) => s.toggleCropping);
+  const crop = useAppStore((s) => s.params.crop);
+  // Stays lit while a crop is in effect, so an active crop is never invisible state.
+  const hasCrop = isValidCrop(crop);
 
   const percent = Math.round(effectiveZoom * 100);
   const isActual = zoomMode === 'manual' && Math.abs(effectiveZoom - 1) < 0.005;
@@ -82,6 +88,20 @@ export function ZoomControls({ effectiveZoom }: ZoomControlsProps) {
           className={`${PILL_BASE} ${isActual ? PILL_ON : PILL_OFF}`}
         >
           1:1
+        </button>
+
+        <span className="mx-0.5 h-4 w-px bg-[#3a3d46]" />
+
+        {/* Crop lives with the view controls rather than the header: it acts on the
+            preview, and the overlay it opens appears right here. */}
+        <button
+          type="button"
+          onClick={toggleCropping}
+          aria-pressed={cropping}
+          title="Crop — select a region to open it as a new view"
+          className={`${PILL_BASE} ${cropping || hasCrop ? PILL_ON : PILL_OFF}`}
+        >
+          Crop
         </button>
       </div>
     </div>

@@ -39,6 +39,9 @@ export function AnimateBar() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [mp4Reason, setMp4Reason] = useState<string | null>(null);
+  // Collapsed by default: animation is a deliberate step, and the settings block is the
+  // tallest thing under the preview. Folding it lets the image dominate the layout.
+  const [open, setOpen] = useState(false);
 
   // Probe H.264 support once; MP4 is offered only if the browser can actually encode it.
   useEffect(() => {
@@ -111,7 +114,35 @@ export function AnimateBar() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2.5">
+    <div className="flex flex-col rounded-lg border border-[var(--panel-border)] bg-[var(--panel)]">
+      {/* Header row is always visible: collapsing hides the settings, never the Animate
+          button itself, so the feature stays one click away rather than two. */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-controls="animate-settings"
+          className="flex items-center gap-2 text-xs font-medium text-[var(--text)]"
+        >
+          <span
+            aria-hidden
+            className={`inline-block transition-transform ${open ? 'rotate-90' : ''}`}
+          >
+            ›
+          </span>
+          Animation
+        </button>
+        {!open && (
+          <span className="truncate text-xs text-[var(--text-dim)]">
+            {animating ? 'Playing' : 'Paused'} · {activeStyle?.label} · {plan.effectiveFps}fps{' '}
+            {format.toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      {open && (
+    <div className="flex flex-col gap-3 border-t border-[var(--panel-border)] px-3 py-2.5" id="animate-settings">
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -271,6 +302,8 @@ export function AnimateBar() {
           )}
           {isMp4 && plan.effectiveFps >= 60 && <> · true 60fps, H.264</>}
         </p>
+      )}
+    </div>
       )}
     </div>
   );

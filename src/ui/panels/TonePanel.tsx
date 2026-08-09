@@ -7,7 +7,7 @@ export function TonePanel() {
   const setParam = useAppStore((s) => s.setParam);
 
   return (
-    <Panel title="Tone">
+    <Panel title="Exposure">
       <Slider
         label="Brightness"
         value={brightness}
