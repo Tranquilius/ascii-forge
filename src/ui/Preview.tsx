@@ -7,6 +7,7 @@ import { ZoomControls } from '@/ui/ZoomControls';
 import { getGlyphSet } from '@/engine/glyphDensity';
 import { createGlyphAnimator } from '@/engine/modulators/glyphAnimation';
 import { CropOverlay } from '@/ui/CropOverlay';
+import { CropTabs } from '@/ui/CropTabs';
 import { measureRampCell } from '@/engine/metrics';
 import { clientToNormalised } from '@/ui/cropGeometry';
 import { resolveCrop } from '@/engine/crop';
@@ -86,6 +87,15 @@ export function Preview() {
   useEffect(() => {
     setFitZoom(fitZoom);
   }, [fitZoom, setFitZoom]);
+
+  // Source pixels the active view actually covers — the whole image, or just the crop.
+  const viewSize = useMemo(
+    () =>
+      sourceBitmap
+        ? resolveCrop(crop, sourceBitmap.width, sourceBitmap.height)
+        : { sx: 0, sy: 0, sw: 1, sh: 1 },
+    [sourceBitmap, crop],
+  );
 
   const displayWidth = base ? Math.round(base.width * effectiveZoom) : 0;
   const displayHeight = base ? Math.round(base.height * effectiveZoom) : 0;
@@ -204,6 +214,7 @@ export function Preview() {
     // min-w-0 on both levels: a flex item defaults to min-width:auto, so without it a
     // zoomed canvas widens the whole page instead of scrolling inside the stage.
     <div className="relative flex min-h-[280px] min-w-0 flex-1 flex-col">
+      <CropTabs />
       <div
         ref={stageRef}
         className="flex min-h-[280px] min-w-0 flex-1 overflow-auto rounded-lg border border-[var(--panel-border)] p-4"
@@ -231,8 +242,12 @@ export function Preview() {
             {cropping && sourceBitmap && frame && (
               <CropOverlay
                 canvasRef={canvasRef}
-                sourceWidth={sourceBitmap.width}
-                sourceHeight={sourceBitmap.height}
+                // The dimensions of what is *on screen*, not of the original file. On a
+                // crop tab the canvas shows only that region, so the overlay's pixel
+                // readout and aspect-ratio presets have to measure against the region —
+                // using the full source would overstate both.
+                sourceWidth={viewSize.sw}
+                sourceHeight={viewSize.sh}
                 cellAspect={measureRampCell(RENDER_FONT_FAMILY, 100, frame.ramp).aspect}
               />
             )}
