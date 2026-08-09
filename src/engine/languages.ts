@@ -6,8 +6,12 @@
  * appearing as tofu. That also means the ordering is by real ink coverage rather than a
  * guess at which characters look heavier.
  *
- * Deliberately excluded: Arabic and other cursive scripts, whose glyphs change shape by
- * position and reorder under bidi — neither survives being placed one-per-cell in a grid.
+ * Deliberately excluded: Arabic, Hebrew and other cursive or right-to-left scripts, whose
+ * glyphs change shape by position and reorder under bidi — neither survives being placed
+ * one-per-cell in a grid.
+ *
+ * Ranges may be given wholesale: the builder drops combining marks by Unicode category, so
+ * a script's dependent vowel signs need not be curated out by hand.
  */
 
 export interface LanguageSet {
@@ -50,14 +54,82 @@ export const LANGUAGE_SETS: readonly LanguageSet[] = [
     ],
   },
   {
-    id: 'hebrew',
-    label: 'Hebrew',
+    id: 'devanagari',
+    label: 'Devanagari',
     ranges: [
-      [0x05d0, 0x05ea], // consonants only — vowel points are combining marks
-      [0x05be, 0x05be],
-      [0x05c0, 0x05c0],
+      [0x0905, 0x0914], // independent vowels
+      [0x0915, 0x0939], // consonants
+      [0x0950, 0x0950], // ॐ
+      [0x0958, 0x0961], // additional consonants and vocalic vowels
+      [0x0964, 0x0965], // danda, double danda
+      [0x0966, 0x096f], // digits
     ],
-    note: 'Hebrew is right-to-left; glyphs are placed per cell, not as running text.',
+    note: 'Sanskrit and Hindi letters. Dependent vowel signs are combining marks and are skipped.',
+  },
+  {
+    id: 'bengali',
+    label: 'Bengali',
+    ranges: [
+      [0x0985, 0x098c],
+      [0x098f, 0x0990],
+      [0x0993, 0x09b9],
+      [0x09ce, 0x09ce],
+      [0x09e6, 0x09ef],
+    ],
+  },
+  {
+    id: 'tamil',
+    label: 'Tamil',
+    ranges: [
+      [0x0b85, 0x0b94], // vowels
+      [0x0b95, 0x0bb9], // consonants
+      [0x0be6, 0x0bef], // digits
+    ],
+  },
+  {
+    id: 'thai',
+    label: 'Thai',
+    ranges: [
+      [0x0e01, 0x0e2e], // consonants
+      [0x0e2f, 0x0e30],
+      [0x0e40, 0x0e46], // leading vowels — these are spacing, unlike the marks above/below
+      [0x0e50, 0x0e59], // digits
+    ],
+    note: 'Consonants and spacing vowels; tone marks sit above a base and are skipped.',
+  },
+  {
+    id: 'georgian',
+    label: 'Georgian',
+    ranges: [
+      [0x10d0, 0x10fa], // Mkhedruli
+      [0x10fb, 0x10fc],
+    ],
+    note: 'Mkhedruli has no letter case, so the ramp is unusually even.',
+  },
+  {
+    id: 'armenian',
+    label: 'Armenian',
+    ranges: [
+      [0x0531, 0x0556], // capitals
+      [0x0561, 0x0586], // lowercase
+      [0x055a, 0x055f],
+    ],
+  },
+  {
+    id: 'ethiopic',
+    label: 'Ethiopic',
+    ranges: [
+      [0x1200, 0x1357], // the syllabary
+      [0x1361, 0x1368], // punctuation
+      [0x1369, 0x1371], // digits
+    ],
+    note: 'A large syllabary of standalone glyphs — one of the richest tonal ranges here.',
+  },
+  {
+    id: 'cherokee',
+    label: 'Cherokee',
+    ranges: [[0x13a0, 0x13f4]],
+    note: 'A syllabary devised by Sequoyah; every glyph stands alone.',
   },
   {
     id: 'japanese',

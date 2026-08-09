@@ -151,6 +151,24 @@ const CANDIDATE_RANGES: ReadonlyArray<readonly [number, number]> = [
 /** A codepoint no font assigns, used to fingerprint this font's "missing glyph" box. */
 const TOFU_PROBE = '\u{10FFFD}';
 
+/**
+ * Unicode Mark category — non-spacing, spacing-combining and enclosing marks.
+ *
+ * These attach to a preceding base character and have no independent form, so they are
+ * excluded from measured ramps. Matching by category rather than by hand-listing ranges is
+ * what lets a whole script be handed to the builder without curating out every vowel sign.
+ */
+const COMBINING_MARK = /\p{M}/u;
+
+/**
+ * How far a glyph's advance may sit from the chosen cluster and still be kept.
+ *
+ * The cell is drawn at one fixed width, so anything much wider spills into its neighbour.
+ * Tight enough to keep the grid honest, loose enough that a proportional fallback face
+ * still yields a usable ramp instead of a handful of same-width outliers.
+ */
+const ADVANCE_TOLERANCE = 0.08;
+
 /** Coverage span treated as one tonal level when thinning the measured ramp. */
 const LEVEL_EPSILON = 1 / 128;
 /**
@@ -268,6 +286,12 @@ export function buildRampFromRanges(
   for (const [lo, hi] of ranges) {
     for (let cp = lo; cp <= hi; cp++) {
       const ch = String.fromCodePoint(cp);
+      // Combining marks have no standalone form. Drawn alone most fonts substitute a
+      // dotted placeholder circle, which has real ink and a unique raster — so it passes
+      // both the tofu and the blank test below, and a script like Devanagari or Thai would
+      // fill the ramp with near-identical circles. They must be rejected by category.
+      if (COMBINING_MARK.test(ch)) continue;
+
       const advance = Math.round(ctx.measureText(ch).width * 10) / 10;
       if (advance <= 0) continue;
 
@@ -280,17 +304,32 @@ export function buildRampFromRanges(
     }
   }
 
-  // Second pass: keep only the dominant advance, so the grid stays square.
+  // Second pass: keep one advance cluster, so the grid stays rectangular.
+  //
+  // Counting exact advances only works for a script the monospace font actually covers.
+  // Anything it lacks (Devanagari, Thai, Tamil…) falls back to a proportional face, where
+  // ~60 glyphs can carry ~50 distinct advances — no single value holds a majority, and two
+  // tiny clusters can tie and be settled by map order, which is how Devanagari ended up as
+  // five wide vowels and no consonants at all.
+  //
+  // So score each advance by how many glyphs sit within tolerance of it, and keep that
+  // window. For a true monospace script every advance is identical and this is a no-op.
   let modalAdvance = 0;
-  let best = 0;
-  for (const [advance, n] of advanceCounts) {
-    if (n > best) {
+  let best = -1;
+  for (const advance of advanceCounts.keys()) {
+    let n = 0;
+    for (const c of candidates) {
+      if (Math.abs(c.advance - advance) <= advance * ADVANCE_TOLERANCE) n++;
+    }
+    // Ties go to the narrower glyph: it packs more per row and is the likelier body text
+    // width, whereas the wide cluster is usually a handful of outliers.
+    if (n > best || (n === best && advance < modalAdvance)) {
       best = n;
       modalAdvance = advance;
     }
   }
   const measured: MeasuredGlyph[] = candidates
-    .filter((c) => Math.abs(c.advance - modalAdvance) <= modalAdvance * 0.05)
+    .filter((c) => Math.abs(c.advance - modalAdvance) <= modalAdvance * ADVANCE_TOLERANCE)
     .map(({ ch, coverage }) => ({ ch, coverage }));
 
   if (measured.length < 2) return null;
