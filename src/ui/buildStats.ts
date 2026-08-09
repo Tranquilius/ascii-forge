@@ -26,12 +26,12 @@ export interface BuildStats {
 }
 
 export const BUILD_STATS: BuildStats = {
-  turns: 933,
-  input: 2_033_835,
-  cacheRead: 294_151_653,
-  output: 726_953,
-  total: 296_912_441,
-  fresh: 2_760_788,
+  turns: 987,
+  input: 2_081_782,
+  cacheRead: 320_317_358,
+  output: 759_856,
+  total: 323_158_996,
+  fresh: 2_841_638,
   asOf: '2026-08-09',
 };
 

@@ -1,11 +1,21 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '@/store';
-import { decodeFile, isAcceptedFile, isVideoFile } from '@/engine/decode';
+import {
+  decodeFile,
+  isAcceptedFile,
+  isVideoFile,
+  MAX_FRAMES,
+  MAX_VIDEO_SECONDS,
+  VIDEO_TARGET_FPS,
+} from '@/engine/decode';
 
 export function DropZone() {
   const setFrames = useAppStore((s) => s.setFrames);
   const setLoading = useAppStore((s) => s.setLoading);
   const setError = useAppStore((s) => s.setError);
+  const setLoadingProgress = useAppStore((s) => s.setLoadingProgress);
+  const setTruncatedToSec = useAppStore((s) => s.setTruncatedToSec);
+  const truncatedToSec = useAppStore((s) => s.truncatedToSec);
   const sourceFileName = useAppStore((s) => s.sourceFileName);
   const frameCount = useAppStore((s) => s.frames.length);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,8 +30,13 @@ export function DropZone() {
       }
       setLoading(true, isVideoFile(file) ? 'Extracting video frames…' : 'Decoding…');
       setError(null);
+      setLoadingProgress(null);
+      setTruncatedToSec(null);
       try {
-        const decoded = await decodeFile(file);
+        const decoded = await decodeFile(file, (p) => {
+          setLoadingProgress({ done: p.done, total: p.total });
+          if (p.truncatedToSec != null) setTruncatedToSec(p.truncatedToSec);
+        });
         if (decoded.length === 0) throw new Error('No frames found.');
         setFrames(decoded, file.name);
       } catch (err) {
@@ -30,7 +45,7 @@ export function DropZone() {
         setLoading(false);
       }
     },
-    [setFrames, setLoading, setError],
+    [setFrames, setLoading, setError, setLoadingProgress, setTruncatedToSec],
   );
 
   return (
@@ -69,6 +84,23 @@ export function DropZone() {
       <p className="text-xs text-[var(--text-dim)]">
         {frameCount > 1 ? `${frameCount} frames · animated` : 'PNG, JPG, WEBP, SVG, GIF, MP4, WEBM'}
       </p>
+      {/* Stated before anything is dropped, not only after a source turns out to be too
+          long. Every frame is held as a live bitmap, so this is a memory ceiling — knowing
+          it up front is the difference between choosing a clip and being surprised by one. */}
+      {frameCount <= 1 && (
+        <p className="text-xs text-[var(--text-dim)]">
+          Video and GIF are capped at {MAX_FRAMES} frames — about {MAX_VIDEO_SECONDS.toFixed(0)}s of
+          video at {VIDEO_TARGET_FPS}fps
+        </p>
+      )}
+      {/* A truncated source used to look like a complete one. Saying so is the difference
+          between a known limit and a file that quietly lost its second half. */}
+      {truncatedToSec != null && frameCount > 1 && (
+        <p className="text-xs text-amber-400">
+          Long source — only the first {truncatedToSec.toFixed(1)}s was captured, the{' '}
+          {MAX_FRAMES}-frame limit
+        </p>
+      )}
     </div>
   );
 }

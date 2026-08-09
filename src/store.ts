@@ -49,6 +49,14 @@ interface AppState {
   isLoading: boolean;
   /** Progress message shown while decoding a long GIF/video. */
   loadingLabel: string | null;
+  /**
+   * Frames decoded so far and expected, or null when the work is not countable.
+   * Extraction runs for tens of seconds on a long video; without a real count the UI can
+   * only show a spinner, which is indistinguishable from a hang.
+   */
+  loadingProgress: { done: number; total: number } | null;
+  /** Seconds captured when a source was longer than the frame ceiling allows. */
+  truncatedToSec: number | null;
   error: string | null;
   /** True once the density-bias "dice" toggle is active — Generate rerolls a random bias. */
   randomizeBias: boolean;
@@ -107,6 +115,8 @@ interface AppState {
   setFrames: (frames: SourceFrame[], fileName: string | null) => void;
   setFrameIndex: (index: number) => void;
   setLoading: (loading: boolean, label?: string | null) => void;
+  setLoadingProgress: (progress: { done: number; total: number } | null) => void;
+  setTruncatedToSec: (sec: number | null) => void;
   setError: (error: string | null) => void;
   setFrame: (frame: AsciiFrame | null) => void;
   setAnimating: (on: boolean) => void;
@@ -145,6 +155,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   sourceFileName: null,
   isLoading: false,
   loadingLabel: null,
+  loadingProgress: null,
+  truncatedToSec: null,
   error: null,
   randomizeBias: false,
   frame: null,
@@ -206,7 +218,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const clamped = Math.min(Math.max(index, 0), frames.length - 1);
     set({ frameIndex: clamped });
   },
-  setLoading: (isLoading, loadingLabel = null) => set({ isLoading, loadingLabel }),
+  setLoading: (isLoading, loadingLabel = null) =>
+    // Clear the counter when loading ends, so a stale bar never lingers over the result.
+    set(isLoading ? { isLoading, loadingLabel } : { isLoading, loadingLabel, loadingProgress: null }),
+  setLoadingProgress: (loadingProgress) => set({ loadingProgress }),
+  setTruncatedToSec: (truncatedToSec) => set({ truncatedToSec }),
   setError: (error) => set({ error }),
   setFrame: (frame) => set({ frame }),
   setAnimating: (animating) => set({ animating }),
