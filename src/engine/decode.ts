@@ -22,7 +22,53 @@ export const MAX_FRAMES = 300;
 const DEFAULT_FRAME_MS = 100;
 
 /** Target sampling rate for video sources. */
-const VIDEO_TARGET_FPS = 12;
+export const VIDEO_TARGET_FPS = 12;
+
+/**
+ * Seconds of video the frame ceiling allows.
+ *
+ * Derived rather than written down, so the figure shown in the UI can never drift away
+ * from the limit actually enforced.
+ */
+export const MAX_VIDEO_SECONDS = MAX_FRAMES / VIDEO_TARGET_FPS;
+
+/** How close counts as "already there", so we don't await a seek that will never fire. */
+const SEEK_EPSILON = 1e-3;
+const SEEK_TIMEOUT_MS = 10_000;
+const METADATA_TIMEOUT_MS = 20_000;
+
+/**
+ * Progress during decoding.
+ *
+ * Extraction of a long video runs for tens of seconds. Without this the UI can only show a
+ * fixed "Decoding…" and is indistinguishable from a hang, which is the single most common
+ * reason to assume the app is broken.
+ */
+export interface DecodeProgressEvent {
+  /** Frames finished so far. */
+  done: number;
+  /** Frames that will be produced in total. Known up front for both video and GIF. */
+  total: number;
+  stage: 'reading' | 'extracting';
+  /**
+   * Set when the source is longer than MAX_FRAMES allows, carrying the seconds actually
+   * captured. Silently truncating a video is worse than saying so.
+   */
+  truncatedToSec?: number;
+}
+
+export type DecodeProgress = (event: DecodeProgressEvent) => void;
+
+/** Reject with a useful message rather than hanging forever on a stalled decoder. */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
 
 export function isVideoFile(file: File): boolean {
   if (ACCEPTED_VIDEO_TYPES.includes(file.type)) return true;
@@ -57,7 +103,10 @@ function resizeOptions(width: number, height: number, maxEdge: number): ImageBit
  * Returns null when ImageDecoder is unavailable or the file turns out to be a still,
  * so the caller can fall back to the single-frame path.
  */
-async function decodeAnimatedGif(file: File): Promise<SourceFrame[] | null> {
+async function decodeAnimatedGif(
+  file: File,
+  onProgress?: DecodeProgress,
+): Promise<SourceFrame[] | null> {
   if (typeof ImageDecoder === 'undefined') return null;
 
   try {
@@ -75,6 +124,8 @@ async function decodeAnimatedGif(file: File): Promise<SourceFrame[] | null> {
       return null;
     }
 
+    onProgress?.({ done: 0, total: frameCount, stage: 'extracting' });
+
     const frames: SourceFrame[] = [];
     for (let i = 0; i < frameCount; i++) {
       const { image } = await decoder.decode({ frameIndex: i });
@@ -86,6 +137,7 @@ async function decodeAnimatedGif(file: File): Promise<SourceFrame[] | null> {
       const durationMs = image.duration ? image.duration / 1000 : DEFAULT_FRAME_MS;
       image.close();
       frames.push({ bitmap, durationMs });
+      onProgress?.({ done: i + 1, total: frameCount, stage: 'extracting' });
     }
     decoder.close();
     return frames;
@@ -102,7 +154,7 @@ async function decodeAnimatedGif(file: File): Promise<SourceFrame[] | null> {
  * fast as the decoder allows instead of in real time, and gives an even frame cadence
  * regardless of the source's variable frame rate.
  */
-async function decodeVideo(file: File): Promise<SourceFrame[]> {
+async function decodeVideo(file: File, onProgress?: DecodeProgress): Promise<SourceFrame[]> {
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
   video.muted = true;
@@ -111,10 +163,14 @@ async function decodeVideo(file: File): Promise<SourceFrame[]> {
   video.src = url;
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error('Could not load that video.'));
-    });
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('Could not load that video.'));
+      }),
+      METADATA_TIMEOUT_MS,
+      'Timed out reading that video — the format may not be supported.',
+    );
 
     const duration = video.duration;
     if (!Number.isFinite(duration) || duration <= 0) {
@@ -122,7 +178,11 @@ async function decodeVideo(file: File): Promise<SourceFrame[]> {
     }
 
     const frameInterval = 1 / VIDEO_TARGET_FPS;
-    const frameCount = Math.min(Math.max(1, Math.floor(duration * VIDEO_TARGET_FPS)), MAX_FRAMES);
+    const wanted = Math.max(1, Math.floor(duration * VIDEO_TARGET_FPS));
+    const frameCount = Math.min(wanted, MAX_FRAMES);
+    // A long video is cut to the first MAX_FRAMES worth. Report how many seconds actually
+    // survived so the caller can say so rather than leaving the rest to vanish unexplained.
+    const truncatedToSec = frameCount < wanted ? frameCount * frameInterval : undefined;
 
     const canvas = document.createElement('canvas');
     const { resizeWidth, resizeHeight } = resizeOptions(
@@ -135,19 +195,43 @@ async function decodeVideo(file: File): Promise<SourceFrame[]> {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not create a canvas to read video frames.');
 
+    onProgress?.({ done: 0, total: frameCount, stage: 'extracting', truncatedToSec });
+
     const frames: SourceFrame[] = [];
-    for (let i = 0; i < frameCount; i++) {
-      const t = i * frameInterval;
-      await new Promise<void>((resolve, reject) => {
-        video.onseeked = () => resolve();
-        video.onerror = () => reject(new Error('Failed while seeking the video.'));
-        video.currentTime = Math.min(t, duration - 0.001);
-      });
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      frames.push({
-        bitmap: await createImageBitmap(canvas),
-        durationMs: frameInterval * 1000,
-      });
+    try {
+      for (let i = 0; i < frameCount; i++) {
+        const target = Math.min(i * frameInterval, duration - 0.001);
+
+        // Assigning currentTime the value it already holds fires no 'seeked' event, so a
+        // naive await here never settles — which is exactly what happens on the very first
+        // frame, where both are 0. Resolve immediately when we are already close enough,
+        // and put a timeout on the rest so a stalled decoder fails loudly rather than
+        // hanging with the UI stuck on a spinner forever.
+        if (Math.abs(video.currentTime - target) > SEEK_EPSILON) {
+          await withTimeout(
+            new Promise<void>((resolve, reject) => {
+              video.onseeked = () => resolve();
+              video.onerror = () => reject(new Error('Failed while seeking the video.'));
+              video.currentTime = target;
+            }),
+            SEEK_TIMEOUT_MS,
+            `Timed out extracting frame ${i + 1} of ${frameCount}.`,
+          );
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frames.push({
+          bitmap: await createImageBitmap(canvas),
+          durationMs: frameInterval * 1000,
+        });
+
+        onProgress?.({ done: i + 1, total: frameCount, stage: 'extracting', truncatedToSec });
+      }
+    } catch (err) {
+      // Release what was already decoded — ImageBitmaps hold native memory that GC will
+      // not reclaim promptly, and a failed extraction could otherwise strand hundreds.
+      for (const f of frames) f.bitmap.close();
+      throw err;
     }
     return frames;
   } finally {
@@ -164,13 +248,17 @@ async function decodeVideo(file: File): Promise<SourceFrame[]> {
  * Every consumer downstream treats a still as a length-1 animation, so nothing else in
  * the pipeline has to branch on whether the source moves.
  */
-export async function decodeFile(file: File): Promise<SourceFrame[]> {
-  if (isVideoFile(file)) return decodeVideo(file);
+export async function decodeFile(file: File, onProgress?: DecodeProgress): Promise<SourceFrame[]> {
+  if (isVideoFile(file)) return decodeVideo(file, onProgress);
 
   if (isGif(file)) {
-    const animated = await decodeAnimatedGif(file);
+    const animated = await decodeAnimatedGif(file, onProgress);
     if (animated && animated.length > 0) return animated;
   }
+
+  // A still resolves in one step; report it so the caller's progress state is consistent
+  // rather than left at whatever a previous file set it to.
+  onProgress?.({ done: 0, total: 1, stage: 'reading' });
 
   // Stills keep their full resolution. One bitmap is cheap to hold, and letting the
   // sampler downscale straight from the original in a single step preserves detail that

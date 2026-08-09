@@ -25,7 +25,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Active LTS. Deliberately not the newest release line: this job gates the
+          # deploy on lint and tests, so it should run on the version the toolchain is
+          # actually exercised against, not one that shipped days ago.
+          node-version: 24
           cache: npm
 
       - run: npm ci

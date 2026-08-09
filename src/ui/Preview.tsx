@@ -31,6 +31,7 @@ export function Preview() {
   const { bgMode, bgColor, blendMode, charSize } = useAppStore((s) => s.params);
   const isLoading = useAppStore((s) => s.isLoading);
   const loadingLabel = useAppStore((s) => s.loadingLabel);
+  const loadingProgress = useAppStore((s) => s.loadingProgress);
   const hasSource = useAppStore((s) => s.frames.length > 0);
 
   const animating = useAppStore((s) => s.animating);
@@ -223,7 +224,40 @@ export function Preview() {
         {!hasSource && !isLoading && (
           <p className="m-auto text-sm text-[#8b909c]">Drop an image, GIF, or video to get started</p>
         )}
-        {isLoading && <p className="m-auto text-sm text-[#8b909c]">{loadingLabel ?? 'Decoding…'}</p>}
+        {isLoading && (
+          <div className="m-auto flex w-64 flex-col gap-2 text-center">
+            <p className="text-sm text-[#8b909c]">{loadingLabel ?? 'Decoding…'}</p>
+            {loadingProgress && loadingProgress.total > 1 ? (
+              <>
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-[#3a3d46]"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={loadingProgress.total}
+                  aria-valuenow={loadingProgress.done}
+                  aria-label="Extraction progress"
+                >
+                  <div
+                    className="h-full rounded-full bg-[#7dd3fc] transition-[width] duration-150"
+                    style={{
+                      width: `${Math.round((loadingProgress.done / loadingProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="font-mono text-xs text-[#8b909c]">
+                  {loadingProgress.done} / {loadingProgress.total} frames ·{' '}
+                  {Math.round((loadingProgress.done / loadingProgress.total) * 100)}%
+                </p>
+              </>
+            ) : (
+              // Indeterminate: the frame count is not known yet (still reading metadata),
+              // so a percentage would be a fiction. A moving bar still says "alive".
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#3a3d46]">
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-[#7dd3fc]" />
+              </div>
+            )}
+          </div>
+        )}
         {hasSource && !isLoading && (
           // margin:auto rather than justify/align-center: in a scroll container, flex
           // centering clips the top-left overflow and makes it unreachable.
