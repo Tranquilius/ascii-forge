@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/store';
 import { countSwappable, getGlyphSet } from '@/engine/glyphDensity';
 import { RENDER_FONT_FAMILY } from '@/engine/pipeline';
@@ -27,6 +27,7 @@ export function AnimateBar() {
   const durationSec = useAppStore((s) => s.animDurationSec);
   const fps = useAppStore((s) => s.animFps);
   const toggleAnimating = useAppStore((s) => s.toggleAnimating);
+  const setAnimating = useAppStore((s) => s.setAnimating);
   const setStyle = useAppStore((s) => s.setAnimStyle);
   const setHoldMs = useAppStore((s) => s.setAnimHoldMs);
   const setDurationSec = useAppStore((s) => s.setAnimDurationSec);
@@ -54,11 +55,20 @@ export function AnimateBar() {
     };
   }, []);
 
-  if (!frame) return null;
-
-  const { alternatives } = getGlyphSet(frame.ramp, RENDER_FONT_FAMILY);
+  const { alternatives } = getGlyphSet(frame?.ramp ?? [], RENDER_FONT_FAMILY);
   const swappable = countSwappable(alternatives);
   const canAnimate = swappable > 0;
+
+  // Expanding the section is the user opting into the animation preview, so start it for
+  // them rather than making them find the Animate button too — but only on the open
+  // transition, so toggling it off by hand while expanded sticks.
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpenRef.current && canAnimate) setAnimating(true);
+    wasOpenRef.current = open;
+  }, [open, canAnimate, setAnimating]);
+
+  if (!frame) return null;
 
   const isMp4 = format === 'mp4';
   const plan = isMp4 ? planMp4Loop(durationSec, holdMs, fps) : planShimmerLoop(durationSec, holdMs, fps);

@@ -28,6 +28,15 @@ export function Footer() {
       </footer>
 
       {showCredits && <CreditsDialog onClose={() => setShowCredits(false)} />}
+
+      <div className="kofi-row">
+        <a className="kofi-button" href="https://ko-fi.com/tranquilius" target="_blank" rel="noopener noreferrer">
+          <span className="kofi-button-icon" aria-hidden="true">
+            ☕
+          </span>
+          <span>Support this project on Ko-fi</span>
+        </a>
+      </div>
     </>
   );
 }
